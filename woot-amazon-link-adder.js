@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WALA: Woot-Amazon Link Adder
 // @namespace    https://github.com/stevenorum/greasemonkey-scripts
-// @version      2025-08-09
+// @version      2025-08-14
 // @description  Add links to the Amazon listings for products on Woot.
 // @author       stevenorum
 // @match        https://*.woot.com/offers/*
@@ -9,66 +9,62 @@
 // @grant        none
 // ==/UserScript==
 
-function getAsin() {
-    if (offerItems) {
-        const asin = offerItems[0].Asin;
-        if (asin) {
-           console.log(`ASIN = ${asin}`);
-            return asin;
-        }
+function getReviewContainer() {
+    const w_reviews = "div.ui-product-detail-rr-container";
+    const wo_reviews = "div.ui-product-detail-rr-container-no-active";
+    if (document.querySelector(w_reviews)) {
+        return document.querySelector(w_reviews);
+    }
+    if (document.querySelector(wo_reviews)) {
+        return document.querySelector(wo_reviews);
     }
     return undefined;
 }
 
-function addProductLinks(asin) {
-    // Yes, I know smile.amazon.com was shut down years ago. I'm just still annoyed that it was and only use smile... URLs in case anyone is watching the metrics.
-    const product_url = `https://smile.amazon.com/dp/${asin}`;
-    if (document.querySelector('a.ui-rr-review-label')) {
-        addProductLinksWithReviews(product_url);
-    } else {
-        addProductLinksWithoutReviews(product_url);
+function getLinkList() {
+    const list_id = "wala_link_list";
+    if (document.getElementById(list_id)) {
+        return document.getElementById(list_id);
     }
-    console.log("Amazon links added.");
+    const review_container = getReviewContainer();
+    const link_list = document.createElement("ul");
+    link_list.setAttribute("id", list_id);
+    review_container.appendChild(link_list);
+    return link_list;
 }
 
-function addLinksToBit(parent, product_url) {
-    const link1 = document.createElement("a");
-    link1.setAttribute("class", "ui-rr-review-label");
-    link1.href = product_url;
-    link1.text = " [Amazon]";
-    parent.appendChild(link1);
+function addLinksForOffer(offerItem, includeBlurb) {
+    const asin = offerItem.Asin;
+    const link_id = `amazon_${asin}_thistab`;
+    const product_url = `https://smile.amazon.com/dp/${asin}`;
+    const price = offerItem.FormattedSalePrice;
+    const desc = offerItem.Key;
 
-    const link2 = link1.cloneNode(true);
-    link2.text = " [new tab]";
-    link2.target = "_blank";
-    parent.appendChild(link2);
-
-}
-
-function addProductLinksWithoutReviews(product_url) {
-    const reviews_link = document.querySelector('span.ui-rr-review-label');
-    // Shorten the original text
-    reviews_link.innerHTML = "0 ratings";
-    addLinksToBit(reviews_link.parentElement, product_url);
-}
-
-function addProductLinksWithReviews(product_url) {
-    const reviews_link = document.querySelector('a.ui-rr-review-label');
-    // Shorten the original link text slightly
-    reviews_link.text = reviews_link.text.replace(" Amazon", "");
-    addLinksToBit(reviews_link.parentElement, product_url);
-
+    if (document.getElementById(link_id) == null) {
+        const link_list = getLinkList();
+        const link_wrapper = document.createElement("li");
+        const link1 = document.createElement("a");
+        link1.setAttribute("class", "ui-rr-review-label");
+        link1.setAttribute("id", link_id);
+        link1.href = product_url;
+        link1.text = ` [${asin}]`;
+        link_wrapper.appendChild(link1);
+        if (includeBlurb) {
+            link_wrapper.appendChild(document.createTextNode(` (${desc} @ ${price}) `));
+        }
+        link_list.appendChild(link_wrapper);
+        console.log(`Link for ${asin} added.`);
+    }
 }
 
 console.log("WALA: loading...");
 function check(changes, observer) {
     if(document.querySelector('.ui-rr-review-label')) {
-        const asin = getAsin();
-        if (!asin) {
-            return;
+            if (offerItems) {
+        for (let i = 0; i < offerItems.length; i++) {
+            addLinksForOffer(offerItems[i], offerItems.length>1);
         }
-        observer.disconnect();
-        addProductLinks(asin);
+    }
     }
 }
 (new MutationObserver(check)).observe(document, {childList: true, subtree: true});
